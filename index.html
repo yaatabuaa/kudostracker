@@ -1,0 +1,589 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, Trophy, TrendingUp, Users, DollarSign, Clock, Star, Calendar, Download, Trash2, Edit3, Save, X, Upload, Database } from 'lucide-react';
+
+const WorkKudosTracker = () => {
+  const [achievements, setAchievements] = useState([]);
+  const [newAchievement, setNewAchievement] = useState({
+    title: '',
+    description: '',
+    date: '',
+    category: 'project',
+    impact: '',
+    metrics: ''
+  });
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editingAchievement, setEditingAchievement] = useState({});
+  const [dataKey, setDataKey] = useState('my-achievements');
+  const [showDataManager, setShowDataManager] = useState(false);
+
+  // Load data when component mounts or dataKey changes
+  useEffect(() => {
+    const savedData = window.sessionStorage?.getItem(`achievements-${dataKey}`) ||
+                     window.localStorage?.getItem(`achievements-${dataKey}`);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setAchievements(parsed);
+      } catch (e) {
+        console.error('Error loading saved data:', e);
+      }
+    }
+  }, [dataKey]);
+
+  // Save data whenever achievements change
+  useEffect(() => {
+    if (achievements.length > 0) {
+      const dataToSave = JSON.stringify(achievements);
+      // Try to save to both session and local storage as fallback
+      try {
+        if (window.sessionStorage) {
+          window.sessionStorage.setItem(`achievements-${dataKey}`, dataToSave);
+        }
+        if (window.localStorage) {
+          window.localStorage.setItem(`achievements-${dataKey}`, dataToSave);
+        }
+      } catch (e) {
+        // If storage fails, we'll continue without persistence
+        console.warn('Storage not available, data will not persist');
+      }
+    }
+  }, [achievements, dataKey]);
+
+  const categories = [
+    { value: 'project', label: 'Project Completion', icon: Trophy, color: 'bg-blue-100 text-blue-800' },
+    { value: 'revenue', label: 'Revenue Impact', icon: DollarSign, color: 'bg-green-100 text-green-800' },
+    { value: 'efficiency', label: 'Process Improvement', icon: TrendingUp, color: 'bg-purple-100 text-purple-800' },
+    { value: 'leadership', label: 'Leadership/Mentoring', icon: Users, color: 'bg-orange-100 text-orange-800' },
+    { value: 'innovation', label: 'Innovation/Ideas', icon: Star, color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'recognition', label: 'External Recognition', icon: Trophy, color: 'bg-red-100 text-red-800' }
+  ];
+
+  const addAchievement = () => {
+    if (!newAchievement.title || !newAchievement.date) return;
+
+    const achievement = {
+      ...newAchievement,
+      id: Date.now(),
+      createdAt: new Date().toLocaleDateString()
+    };
+
+    setAchievements([achievement, ...achievements]);
+    setNewAchievement({
+      title: '',
+      description: '',
+      date: '',
+      category: 'project',
+      impact: '',
+      metrics: ''
+    });
+    setShowForm(false);
+  };
+
+  const deleteAchievement = (id) => {
+    setAchievements(achievements.filter(a => a.id !== id));
+  };
+
+  const startEditing = (achievement) => {
+    setEditingId(achievement.id);
+    setEditingAchievement({...achievement});
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditingAchievement({});
+  };
+
+  const saveEdit = () => {
+    if (!editingAchievement.title || !editingAchievement.date) return;
+
+    setAchievements(achievements.map(a =>
+      a.id === editingId ? { ...editingAchievement, updatedAt: new Date().toLocaleDateString() } : a
+    ));
+    setEditingId(null);
+    setEditingAchievement({});
+  };
+
+  const exportData = () => {
+    const data = achievements.map(a => ({
+      Date: a.date,
+      Title: a.title,
+      Category: categories.find(c => c.value === a.category)?.label,
+      Description: a.description,
+      Impact: a.impact,
+      Metrics: a.metrics
+    }));
+
+    const csv = [
+      Object.keys(data[0] || {}).join(','),
+      ...data.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `achievements-${dataKey}.csv`;
+    a.click();
+  };
+
+  const exportJSON = () => {
+    const dataToExport = {
+      dataKey,
+      exportDate: new Date().toISOString(),
+      achievements
+    };
+
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `achievements-${dataKey}.json`;
+    a.click();
+  };
+
+  const importJSON = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        if (imported.achievements && Array.isArray(imported.achievements)) {
+          setAchievements(imported.achievements);
+          if (imported.dataKey) {
+            setDataKey(imported.dataKey);
+          }
+        }
+      } catch (error) {
+        alert('Error importing file. Please make sure it\'s a valid JSON export.');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // Reset file input
+  };
+
+  const switchDataSet = (newKey) => {
+    setDataKey(newKey);
+    setShowDataManager(false);
+  };
+
+  const clearAllData = () => {
+    if (confirm('Are you sure you want to clear all achievements? This cannot be undone.')) {
+      setAchievements([]);
+      try {
+        if (window.sessionStorage) {
+          window.sessionStorage.removeItem(`achievements-${dataKey}`);
+        }
+        if (window.localStorage) {
+          window.localStorage.removeItem(`achievements-${dataKey}`);
+        }
+      } catch (e) {
+        // Ignore storage errors
+      }
+    }
+  };
+
+  const getCategoryInfo = (category) => {
+    return categories.find(c => c.value === category) || categories[0];
+  };
+
+  const stats = {
+    total: achievements.length,
+    thisMonth: achievements.filter(a => {
+      const achievementDate = new Date(a.date);
+      const now = new Date();
+      return achievementDate.getMonth() === now.getMonth() &&
+             achievementDate.getFullYear() === now.getFullYear();
+    }).length,
+    categories: [...new Set(achievements.map(a => a.category))].length
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 bg-gray-50 min-h-screen">
+      <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Achievement Tracker</h1>
+            <p className="text-gray-600">Document your wins and build your promotion case</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Current dataset: <span className="font-medium">{dataKey}</span>
+              {achievements.length > 0 && <span className="ml-2 text-green-600">✓ Auto-saved</span>}
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDataManager(!showDataManager)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              <Database size={20} />
+              Data Manager
+            </button>
+            {achievements.length > 0 && (
+              <>
+                <button
+                  onClick={exportData}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Download size={20} />
+                  Export CSV
+                </button>
+                <button
+                  onClick={exportJSON}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <Download size={20} />
+                  Export JSON
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={20} />
+              Add Achievement
+            </button>
+          </div>
+        </div>
+
+        {/* Data Manager */}
+        {showDataManager && (
+          <div className="bg-gray-50 p-6 rounded-lg mb-6">
+            <h3 className="text-lg font-semibold mb-4">Data Manager</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-medium mb-3">Switch Dataset</h4>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Enter dataset name"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && e.target.value.trim()) {
+                        switchDataSet(e.target.value.trim());
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <p className="text-sm text-gray-500">Press Enter to switch to a different dataset</p>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-medium mb-3">Import/Export</h4>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg cursor-pointer hover:bg-blue-200 transition-colors">
+                    <Upload size={16} />
+                    Import JSON File
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={importJSON}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={clearAllData}
+                    className="w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                  >
+                    Clear All Data
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                <strong>Auto-save:</strong> Your data is automatically saved as you work.
+                Use datasets to organize different projects or time periods.
+                Export JSON files to backup your data or share between devices.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Trophy className="text-blue-600" size={24} />
+              <div>
+                <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+                <p className="text-blue-600 text-sm">Total Achievements</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Calendar className="text-green-600" size={24} />
+              <div>
+                <p className="text-2xl font-bold text-green-600">{stats.thisMonth}</p>
+                <p className="text-green-600 text-sm">This Month</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Star className="text-purple-600" size={24} />
+              <div>
+                <p className="text-2xl font-bold text-purple-600">{stats.categories}</p>
+                <p className="text-purple-600 text-sm">Categories</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Add Achievement Form */}
+        {showForm && (
+          <div className="bg-gray-50 p-6 rounded-lg mb-6">
+            <h3 className="text-lg font-semibold mb-4">Add New Achievement</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title*</label>
+                <input
+                  type="text"
+                  value={newAchievement.title}
+                  onChange={(e) => setNewAchievement({...newAchievement, title: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., Launched new customer portal"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date*</label>
+                <input
+                  type="date"
+                  value={newAchievement.date}
+                  onChange={(e) => setNewAchievement({...newAchievement, date: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <select
+                  value={newAchievement.category}
+                  onChange={(e) => setNewAchievement({...newAchievement, category: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {categories.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Metrics/Numbers</label>
+                <input
+                  type="text"
+                  value={newAchievement.metrics}
+                  onChange={(e) => setNewAchievement({...newAchievement, metrics: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., 25% increase, $50K saved, 3 weeks early"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={newAchievement.description}
+                  onChange={(e) => setNewAchievement({...newAchievement, description: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="3"
+                  placeholder="Describe what you accomplished and how you did it..."
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Business Impact</label>
+                <textarea
+                  value={newAchievement.impact}
+                  onChange={(e) => setNewAchievement({...newAchievement, impact: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="2"
+                  placeholder="How did this benefit the team, company, or customers?"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={addAchievement}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Save Achievement
+              </button>
+              <button
+                onClick={() => setShowForm(false)}
+                className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Achievements List */}
+        <div className="space-y-4">
+          {achievements.length === 0 ? (
+            <div className="text-center py-12">
+              <Trophy className="mx-auto text-gray-400 mb-4" size={48} />
+              <h3 className="text-lg font-medium text-gray-500 mb-2">No achievements yet</h3>
+              <p className="text-gray-400">Start tracking your wins to build your promotion case!</p>
+            </div>
+          ) : (
+            achievements.map((achievement) => {
+              const categoryInfo = getCategoryInfo(achievement.category);
+              const Icon = categoryInfo.icon;
+
+              return (
+                <div key={achievement.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                  {editingId === achievement.id ? (
+                    // Edit Mode
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Title*</label>
+                          <input
+                            type="text"
+                            value={editingAchievement.title || ''}
+                            onChange={(e) => setEditingAchievement({...editingAchievement, title: e.target.value})}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Date*</label>
+                          <input
+                            type="date"
+                            value={editingAchievement.date || ''}
+                            onChange={(e) => setEditingAchievement({...editingAchievement, date: e.target.value})}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                          <select
+                            value={editingAchievement.category || 'project'}
+                            onChange={(e) => setEditingAchievement({...editingAchievement, category: e.target.value})}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            {categories.map(cat => (
+                              <option key={cat.value} value={cat.value}>{cat.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Metrics/Numbers</label>
+                          <input
+                            type="text"
+                            value={editingAchievement.metrics || ''}
+                            onChange={(e) => setEditingAchievement({...editingAchievement, metrics: e.target.value})}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                          <textarea
+                            value={editingAchievement.description || ''}
+                            onChange={(e) => setEditingAchievement({...editingAchievement, description: e.target.value})}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            rows="3"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Business Impact</label>
+                          <textarea
+                            value={editingAchievement.impact || ''}
+                            onChange={(e) => setEditingAchievement({...editingAchievement, impact: e.target.value})}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            rows="2"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={saveEdit}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          <Save size={16} />
+                          Save Changes
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                        >
+                          <X size={16} />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // View Mode
+                    <>
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${categoryInfo.color}`}>
+                            <Icon size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-800">{achievement.title}</h3>
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span className="flex items-center gap-1">
+                                <Calendar size={14} />
+                                {new Date(achievement.date).toLocaleDateString()}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs ${categoryInfo.color}`}>
+                                {categoryInfo.label}
+                              </span>
+                              {achievement.updatedAt && (
+                                <span className="text-xs text-gray-400">
+                                  Updated: {achievement.updatedAt}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => startEditing(achievement)}
+                            className="text-gray-400 hover:text-blue-500 transition-colors p-1"
+                            title="Edit achievement"
+                          >
+                            <Edit3 size={18} />
+                          </button>
+                          <button
+                            onClick={() => deleteAchievement(achievement.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                            title="Delete achievement"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {achievement.metrics && (
+                        <div className="mb-3">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                            <TrendingUp size={14} />
+                            {achievement.metrics}
+                          </span>
+                        </div>
+                      )}
+
+                      {achievement.description && (
+                        <p className="text-gray-700 mb-3">{achievement.description}</p>
+                      )}
+
+                      {achievement.impact && (
+                        <div className="bg-green-50 p-3 rounded-lg">
+                          <p className="text-sm font-medium text-green-800 mb-1">Business Impact:</p>
+                          <p className="text-green-700 text-sm">{achievement.impact}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WorkKudosTracker;
